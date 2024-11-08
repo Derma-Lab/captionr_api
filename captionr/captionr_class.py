@@ -58,6 +58,70 @@ class Captionr:
                 break
         return paths
 
+    def process_img_api(self, img):
+        config = self.config
+        try:
+            # Since we're processing an image directly, no file operations are needed
+            existing_caption = ''
+            new_caption = existing_caption
+
+            # Use clip_interrogator to process image and existing caption
+            if (config.clip_artist or config.clip_flavor or config.clip_trending or config.clip_movement or config.clip_medium) and config._clip is not None:
+                func = getattr(config._clip, config.clip_method)
+                tags = func(caption=new_caption, image=img, max_flavors=config.clip_max_flavors)
+                logging.debug(f'CLIP tags: {tags}')
+                out_tags = [tag.strip() for tag in tags.split(",")]
+            else:
+                out_tags = []
+
+            # Remove duplicates, filter similar tags
+            unique_tags = []
+            tags_to_ignore = []
+            if config.ignore_tags != "" and config.ignore_tags is not None:
+                si_tags = config.ignore_tags.split(",")
+                for tag in si_tags:
+                    tags_to_ignore.append(tag.strip())
+
+            if config.uniquify_tags:
+                for tag in out_tags:
+                    tstr = tag.strip()
+                    if not tstr in unique_tags and not "_\(" in tag and tstr not in tags_to_ignore:
+                        should_append = True
+                        for s in unique_tags:
+                            if fuzz.ratio(s, tstr) > self.config.fuzz_ratio:
+                                should_append = False
+                                break
+                        if should_append:
+                            unique_tags.append(tag.replace('"', '').strip())
+            else:
+                for tag in out_tags:
+                    if not "_\(" in tag and tag.strip() not in tags_to_ignore:
+                        unique_tags.append(tag.replace('"', '').strip())
+
+            # Construct new caption from tag list
+            caption_txt = ", ".join(unique_tags)
+
+            if config.find is not None and config.find != '' and config.replace is not None and config.replace != '':
+                if f"{config.find}" in caption_txt:
+                    caption_txt = caption_txt.replace(f"{config.find}", config.replace)
+
+            tags = caption_txt.split(" ")
+            if config.cap_length != 0 and len(tags) > config.cap_length:
+                tags = tags[0:config.cap_length]
+                tags[-1] = tags[-1].rstrip(",")
+            caption_txt = " ".join(tags)
+
+            if config.append_text != '' and config.append_text is not None:
+                caption_txt = caption_txt + config.append_text
+
+            if config.prepend_text != '' and config.prepend_text is not None:
+                caption_txt = config.prepend_text.rstrip().lstrip() + ' ' + caption_txt
+
+            return caption_txt
+        except Exception as e:
+            logging.exception(f"Exception occurred processing image")
+            raise e
+
     def process_img(self, img_path):
         config = self.config
         try:
