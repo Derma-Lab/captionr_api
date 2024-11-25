@@ -1,4 +1,6 @@
 
+Step 0: Add your images to the "image" directory given in the folder and set output as "output" directory. 
+
 1. Setup a venv using:
 
 
